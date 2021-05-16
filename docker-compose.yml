@@ -1,0 +1,69 @@
+version: '3.7'
+
+services:
+  traefik:
+    image: traefik:1.7
+    command: --docker --docker.exposedbydefault=false
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  web:
+    image: nginx:latest
+    labels:
+      - traefik.enable=true
+      - traefik.frontend.rule=Host:project.localhost
+    ports:
+      - "80"
+    volumes:
+      - ./app:/app
+      - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/nginx.conf
+    links:
+      - php
+
+  php:
+    build: docker/php
+    volumes:
+      - ./app:/app
+
+  mysql:
+    image: mariadb:10.6
+    # Expose port outside docker to use a MySQL client
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+      MYSQL_DATABASE: project
+      MYSQL_USER: project
+      MYSQL_PASSWORD: project
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/utf8mb4.cnf:/etc/mysql/conf.d/utf8mb4.cnf:ro
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:5.0
+    labels:
+      - traefik.enable=true
+      - traefik.backend=phpmyadmin
+      - traefik.frontend.rule=Host:phpmyadmin.localhost
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: root
+      PMA_PASSWORD: admin
+      UPLOAD_LIMIT: 1G
+
+  mailhog:
+    image: mailhog/mailhog
+    labels:
+      - traefik.enable=true
+      - traefik.backend=mailhog
+      - traefik.frontend.rule=Host:mailhog.localhost
+      - traefik.port=8025
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  mysql_data:
+    driver: local
